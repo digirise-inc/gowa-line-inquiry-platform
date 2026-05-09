@@ -18,7 +18,13 @@ async function safeQuery<T>(fn: () => Promise<T>, fallback: T): Promise<T> {
   }
 }
 
+// デモモード判定（ハードコードでも安全）
+const isDemo =
+  (process.env.DEMO_MODE ?? "").trim() === "true" ||
+  (process.env.NEXT_PUBLIC_DEMO_MODE ?? "").trim() === "true";
+
 export async function getDashboardSummary() {
+  // DB アクセスを試みる
   const tickets = await safeQuery(
     () =>
       db.ticket.findMany({
@@ -28,6 +34,29 @@ export async function getDashboardSummary() {
     [] as any[],
   );
   const mappings = await safeQuery(() => db.lineMapping.findMany(), [] as any[]);
+
+  // DEMO_MODE で DB が空ならフォールバック数値を返す
+  if (isDemo && tickets.length === 0) {
+    const now = new Date();
+    const trend7 = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(now);
+      d.setDate(d.getDate() - (6 - i));
+      return { day: `${d.getMonth() + 1}/${d.getDate()}`, count: 8 + Math.floor(Math.random() * 14) };
+    });
+    return {
+      open: 9,
+      inProgress: 4,
+      done: 12,
+      lost: 2,
+      unmappedCount: 5,
+      aiCoverage: 86,
+      avgFirstResponseMin: 18,
+      todayProcessed: 7,
+      topActions: [],
+      trend: trend7,
+      totalTickets: 27,
+    };
+  }
 
   const open = tickets.filter((t) => ["open", "escalated"].includes(t.status)).length;
   const inProgress = tickets.filter((t) =>
