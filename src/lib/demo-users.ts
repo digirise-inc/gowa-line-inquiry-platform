@@ -118,12 +118,12 @@ export function getDemoUserById(id: string | null | undefined): DemoUser | null 
  *  - Server Component: DEMO_MODE が見える
  *  - Client Component: NEXT_PUBLIC_DEMO_MODE が見える
  *  - 両方を OR で見ることで、ビルド時の inline と実行時の env 両方をカバー
+ *  - trim() で改行・空白の混入に対応 (Vercel CLI add時の `\n` 付与など)
  */
 export function isDemoMode(): boolean {
-  return (
-    process.env.DEMO_MODE === "true" ||
-    process.env.NEXT_PUBLIC_DEMO_MODE === "true"
-  );
+  const a = (process.env.DEMO_MODE ?? "").trim();
+  const b = (process.env.NEXT_PUBLIC_DEMO_MODE ?? "").trim();
+  return a === "true" || b === "true";
 }
 
 /**
