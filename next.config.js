@@ -1,6 +1,15 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Vercel serverless function に SQLite DB ファイルと Prisma engine を同梱
+  outputFileTracingIncludes: {
+    "/**/*": [
+      "./prisma/dev.db",
+      "./prisma/schema.prisma",
+      "./node_modules/.prisma/client/**",
+      "./node_modules/@prisma/client/**",
+    ],
+  },
   experimental: {
     serverComponentsExternalPackages: ["@prisma/client", "bcryptjs"],
   },
