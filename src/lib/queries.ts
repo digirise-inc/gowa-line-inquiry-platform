@@ -3,18 +3,31 @@
  *
  * - DB アクセスはここに集約 (page.tsx には書かない)
  * - 型は型推論で自然に取れる
+ * - DB接続失敗時（Vercel SQLite read-only等）は空フォールバックを返す
  */
 
 import { db } from "./prisma";
 
+// Vercel SQLite が read-only で失敗するケースのため try/catch wrapper
+async function safeQuery<T>(fn: () => Promise<T>, fallback: T): Promise<T> {
+  try {
+    return await fn();
+  } catch (err) {
+    console.warn("[queries] DB query failed, using fallback:", String(err).slice(0, 200));
+    return fallback;
+  }
+}
+
 export async function getDashboardSummary() {
-  const [tickets, mappings] = await Promise.all([
-    db.ticket.findMany({
-      include: { assignee: true, customer: true },
-      orderBy: { createdAt: "desc" },
-    }),
-    db.lineMapping.findMany(),
-  ]);
+  const tickets = await safeQuery(
+    () =>
+      db.ticket.findMany({
+        include: { assignee: true, customer: true },
+        orderBy: { createdAt: "desc" },
+      }),
+    [] as any[],
+  );
+  const mappings = await safeQuery(() => db.lineMapping.findMany(), [] as any[]);
 
   const open = tickets.filter((t) => ["open", "escalated"].includes(t.status)).length;
   const inProgress = tickets.filter((t) =>
@@ -97,51 +110,70 @@ export async function getTicketsList(opts?: {
   if (opts?.category && opts.category !== "all") where.category = opts.category;
   if (opts?.isUnmapped) where.isUnmapped = true;
 
-  return db.ticket.findMany({
-    where,
-    include: {
-      assignee: true,
-      customer: true,
-      messages: { orderBy: { sentAt: "asc" } },
-    },
-    orderBy: [{ priority: "desc" }, { createdAt: "desc" }],
-  });
+  return safeQuery(
+    () =>
+      db.ticket.findMany({
+        where,
+        include: {
+          assignee: true,
+          customer: true,
+          messages: { orderBy: { sentAt: "asc" } },
+        },
+        orderBy: [{ priority: "desc" }, { createdAt: "desc" }],
+      }),
+    [] as any[],
+  );
 }
 
 export async function getTicketById(id: string) {
-  return db.ticket.findFirst({
-    where: { OR: [{ id }, { publicId: id }] },
-    include: {
-      assignee: true,
-      customer: true,
-      messages: { orderBy: { sentAt: "asc" }, include: { sender: true } },
-    },
-  });
+  return safeQuery(
+    () =>
+      db.ticket.findFirst({
+        where: { OR: [{ id }, { publicId: id }] },
+        include: {
+          assignee: true,
+          customer: true,
+          messages: { orderBy: { sentAt: "asc" }, include: { sender: true } },
+        },
+      }),
+    null as any,
+  );
 }
 
 export async function getUsers() {
-  return db.user.findMany({ orderBy: { name: "asc" } });
+  return safeQuery(() => db.user.findMany({ orderBy: { name: "asc" } }), [] as any[]);
 }
 
 export async function getMappings() {
-  return db.lineMapping.findMany({
-    include: { customer: true, linkedBy: true },
-    orderBy: [{ status: "asc" }, { lastSeenAt: "desc" }],
-  });
+  return safeQuery(
+    () =>
+      db.lineMapping.findMany({
+        include: { customer: true, linkedBy: true },
+        orderBy: [{ status: "asc" }, { lastSeenAt: "desc" }],
+      }),
+    [] as any[],
+  );
 }
 
 export async function getCustomers() {
-  return db.customer.findMany({ orderBy: { code: "asc" } });
+  return safeQuery(() => db.customer.findMany({ orderBy: { code: "asc" } }), [] as any[]);
 }
 
 export async function getUnmappedCount() {
-  return db.lineMapping.count({ where: { status: { not: "linked" } } });
+  return safeQuery(() => db.lineMapping.count({ where: { status: { not: "linked" } } }), 0);
 }
 
 export async function getGchatSpaces() {
-  return db.gchatSpace.findMany({
-    include: {
-      threads: { include: { messages: { orderBy: { createdAt: "asc" } } }, orderBy: { updatedAt: "desc" } },
-    },
-  });
+  return safeQuery(
+    () =>
+      db.gchatSpace.findMany({
+        include: {
+          threads: {
+            include: { messages: { orderBy: { createdAt: "asc" } } },
+            orderBy: { updatedAt: "desc" },
+          },
+        },
+      }),
+    [] as any[],
+  );
 }
