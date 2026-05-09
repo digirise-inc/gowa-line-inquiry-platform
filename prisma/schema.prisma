@@ -1,0 +1,242 @@
+// Gowa LINE Inquiry Platform - Prisma Schema
+// 開発: SQLite / 本番: PostgreSQL に切替可能
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────
+// NextAuth.js 標準モデル
+// ─────────────────────────────────────────────
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  role          String    @default("staff_office") // manager | staff_office | staff_field
+  position      String? // 役職表記 (例: 専務 / 事務員)
+  accounts      Account[]
+  sessions      Session[]
+  // ドメイン関連
+  ownedTickets   Ticket[]   @relation("TicketAssignee")
+  authoredMsg    Message[]  @relation("MessageSender")
+  linkedMappings LineMapping[] @relation("MappingLinker")
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ─────────────────────────────────────────────
+// 顧客マスタ
+// ─────────────────────────────────────────────
+model Customer {
+  id          String   @id @default(cuid())
+  code        String   @unique // 基幹BPS顧客コード (例: CUST-0123)
+  name        String // 屋号
+  contactName String? // 担当者名
+  phone       String?
+  email       String?
+  area        String? // 和歌山市 / 紀の川市 etc
+  segment     String? // 居酒屋 / レストラン / 旅館 etc
+  notes       String?
+  tickets     Ticket[]
+  mappings    LineMapping[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ─────────────────────────────────────────────
+// チケット (業務管理プラットフォーム共通基盤)
+// ─────────────────────────────────────────────
+model Ticket {
+  id              String   @id @default(cuid())
+  publicId        String   @unique // 表示用ID (TKT-XXXX)
+  ticketType      String   @default("single") // single | case | recurring | project
+  kind            String   @default("inbound") // inbound | outbound
+  channel         String   @default("official_line") // official_line | email | phone | manual | gchat
+  category        String   @default("inquiry") // inquiry | order | delivery | billing | claim | other
+  status          String   @default("open") // open | triaging | internal_check | supplier_quote | awaiting_reply | answered | closed_won | closed_lost | escalated
+  priority        String   @default("normal") // low | normal | high | urgent
+  subject         String
+  preview         String // 一覧で line-clamp 表示
+  // 顧客情報
+  customerId      String?
+  customer        Customer? @relation(fields: [customerId], references: [id])
+  customerName    String? // 非正規化 (マッピング前の表示用)
+  // LINE
+  lineUserId      String?
+  isUnmapped      Boolean  @default(false)
+  // 担当
+  assigneeId      String?
+  assignee        User?    @relation("TicketAssignee", fields: [assigneeId], references: [id])
+  // 引き継ぎ・失注
+  handoverNote    String?
+  lostReason      String? // out_of_stock | timing | price | competitor | other
+  lostReasonNote  String?
+  // タイムスタンプ
+  dueAt           DateTime?
+  firstResponseAt DateTime?
+  answeredAt      DateTime?
+  closedAt        DateTime?
+  // 運用
+  escalationCount Int      @default(0)
+  aiCategories    String? // JSON array
+  suggestedTemplateId String?
+  // 関連
+  messages        Message[]
+  // メタ
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([status])
+  @@index([assigneeId])
+  @@index([lineUserId])
+  @@index([customerId])
+}
+
+// ─────────────────────────────────────────────
+// メッセージ (チケット内のスレッド)
+// ─────────────────────────────────────────────
+model Message {
+  id            String   @id @default(cuid())
+  ticketId      String
+  ticket        Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  // 方向
+  direction     String // inbound | outbound | internal
+  channel       String // line | email | phone | gchat | manual
+  // 送信者
+  senderId      String? // User.id (社内発信のみ)
+  sender        User?    @relation("MessageSender", fields: [senderId], references: [id])
+  senderName    String // 表示名 (顧客の displayName など)
+  // 本文
+  contentType   String   @default("text") // text | image | video | audio | file | sticker | location
+  content       String
+  attachmentUrl String?
+  // LINE 連携
+  lineMessageId String?
+  // タイムスタンプ
+  sentAt        DateTime @default(now())
+  readAt        DateTime?
+
+  @@index([ticketId])
+  @@index([sentAt])
+}
+
+// ─────────────────────────────────────────────
+// LINE userId ↔ 顧客コード マッピング
+// ─────────────────────────────────────────────
+model LineMapping {
+  id                    String   @id @default(cuid())
+  lineUserId            String   @unique // U + 32hex
+  displayName           String
+  pictureUrl            String?
+  status                String   @default("unverified") // unverified | linked | multiple_candidates | failed
+  // 紐付け先
+  customerId            String?
+  customer              Customer? @relation(fields: [customerId], references: [id])
+  candidateCustomerIds  String? // JSON array
+  candidateEvidences    String? // JSON
+  // メタ
+  firstSeenAt           DateTime @default(now())
+  lastSeenAt            DateTime @default(now())
+  messageCount          Int      @default(0)
+  recentPreview         String?
+  linkedById            String?
+  linkedBy              User?    @relation("MappingLinker", fields: [linkedById], references: [id])
+  linkedAt              DateTime?
+  linkedMethod          String? // manual | ai_suggested_confirmed
+  notes                 String?
+
+  @@index([status])
+}
+
+// ─────────────────────────────────────────────
+// LINE Webhook 受信ログ
+// ─────────────────────────────────────────────
+model LineMessageLog {
+  id             String   @id @default(cuid())
+  webhookEventId String   @unique
+  lineUserId     String?
+  messageId      String?
+  eventType      String // message | follow | unfollow | postback | ...
+  messageType    String? // text | image | ...
+  rawPayload     String // JSON
+  signatureValid Boolean  @default(true)
+  receivedAt     DateTime @default(now())
+  processedAt    DateTime?
+  ticketId       String?
+  error          String?
+
+  @@index([receivedAt])
+  @@index([eventType])
+}
+
+// ─────────────────────────────────────────────
+// Google Chat スペース (ダミー)
+// ─────────────────────────────────────────────
+model GchatSpace {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  type        String   @default("space") // space | dm
+  createdAt   DateTime @default(now())
+  threads     GchatThread[]
+}
+
+model GchatThread {
+  id        String   @id @default(cuid())
+  spaceId   String
+  space     GchatSpace @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  subject   String
+  messages  GchatMessage[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model GchatMessage {
+  id         String   @id @default(cuid())
+  threadId   String
+  thread     GchatThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  senderName String
+  senderImg  String?
+  content    String
+  createdAt  DateTime @default(now())
+}
