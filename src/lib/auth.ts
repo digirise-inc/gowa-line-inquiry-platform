@@ -49,31 +49,37 @@ export const authConfig: NextAuthConfig = {
               );
               if (!demoUser) return null;
 
-              // DB に upsert してから返す。adapter が後続でセッションを書く際に整合させる
-              const user = await db.user.upsert({
-                where: { id: demoUser.id },
-                update: {
-                  name: demoUser.name,
-                  email: demoUser.email,
-                  image: demoUser.image,
-                  role: demoUser.prismaRole,
-                  position: demoUser.title,
-                },
-                create: {
-                  id: demoUser.id,
-                  name: demoUser.name,
-                  email: demoUser.email,
-                  image: demoUser.image,
-                  role: demoUser.prismaRole,
-                  position: demoUser.title,
-                },
-              });
+              // DB upsert は best-effort（Vercel SQLite がread-onlyな環境でも動くよう例外吸収）
+              try {
+                await db.user.upsert({
+                  where: { id: demoUser.id },
+                  update: {
+                    name: demoUser.name,
+                    email: demoUser.email,
+                    image: demoUser.image,
+                    role: demoUser.prismaRole,
+                    position: demoUser.title,
+                  },
+                  create: {
+                    id: demoUser.id,
+                    name: demoUser.name,
+                    email: demoUser.email,
+                    image: demoUser.image,
+                    role: demoUser.prismaRole,
+                    position: demoUser.title,
+                  },
+                });
+              } catch (err) {
+                // SQLiteがread-onlyやテーブルがない場合でも、JWTセッションで動作継続
+                console.warn("[demo-auth] DB upsert skipped:", String(err).slice(0, 120));
+              }
 
+              // DB の有無に関わらず、固定 DEMO_USERS から返す（JWTセッションへ焼き込み）
               return {
-                id: user.id,
-                name: user.name ?? undefined,
-                email: user.email ?? undefined,
-                image: user.image ?? undefined,
+                id: demoUser.id,
+                name: demoUser.name,
+                email: demoUser.email,
+                image: demoUser.image,
                 // 後続の jwt() で参照できる拡張フィールド
                 role: demoUser.role,
                 prismaRole: demoUser.prismaRole,
@@ -109,18 +115,26 @@ export const authConfig: NextAuthConfig = {
 
       // デモロールを「他のロールで試す」で切り替えた直後など、トークンを更新したいケース
       if (trigger === "update" && token.id) {
-        const u = await db.user.findUnique({ where: { id: token.id as string } });
-        if (u) {
-          token.role = u.role as DemoRole | string;
-          token.title = u.position ?? token.title;
+        try {
+          const u = await db.user.findUnique({ where: { id: token.id as string } });
+          if (u) {
+            token.role = u.role as DemoRole | string;
+            token.title = u.position ?? token.title;
+          }
+        } catch {
+          // DB read fail (Vercel SQLite等) は無視。JWT に既に焼き込まれた値を維持
         }
       }
 
       // role が空のときの fallback (Google 経由ログイン等)
       if (token.id && !token.role) {
-        const u = await db.user.findUnique({ where: { id: token.id as string } });
-        token.role = u?.role ?? "staff_office";
-        token.title = u?.position ?? null;
+        try {
+          const u = await db.user.findUnique({ where: { id: token.id as string } });
+          token.role = u?.role ?? "staff_office";
+          token.title = u?.position ?? null;
+        } catch {
+          token.role = "staff_office";
+        }
       }
 
       // permissions が空のとき、デモロール定義から再構築
