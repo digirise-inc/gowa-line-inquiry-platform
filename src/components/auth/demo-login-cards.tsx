@@ -2,20 +2,26 @@
 
 import { signIn } from "next-auth/react";
 import { useState } from "react";
-import { DEMO_USERS, type DemoRole } from "@/lib/demo-users";
+import { DEMO_USERS, type DemoRole, getDemoUserByRole } from "@/lib/demo-users";
 import { cn } from "@/lib/utils";
-import { Loader2 } from "lucide-react";
+import { Loader2, ChevronDown, Crown, User } from "lucide-react";
 
 /**
- * 4 ロール分のワンクリックログインカード。
+ * デモログイン UI
+ *
+ * メイン: 「管理者」「一般社員」の2大ボタン（サクッとログイン用）
+ * サブ: 「他のロールで試す」展開で4ロール全部
  *
  * SECURITY: クリックハンドラは固定 DEMO_USERS から role を取り出して
  *   signIn('demo', { role }) に渡す。ユーザー入力からは生成しない。
  */
 export function DemoLoginCards({ callbackUrl = "/" }: { callbackUrl?: string }) {
   const [pending, setPending] = useState<DemoRole | null>(null);
+  const [showAll, setShowAll] = useState(false);
 
   async function loginAs(role: DemoRole) {
+    // SECURITY: allowlist 経由で role を必ず照合
+    if (!getDemoUserByRole(role)) return;
     setPending(role);
     try {
       await signIn("demo", {
@@ -29,75 +35,126 @@ export function DemoLoginCards({ callbackUrl = "/" }: { callbackUrl?: string }) 
     }
   }
 
+  // メインの2ボタン: 管理者 = 後和専務(kowa) / 一般社員 = 中尾事務員(staff_office)
+  const adminUser = DEMO_USERS.find((u) => u.role === "kowa")!;
+  const staffUser = DEMO_USERS.find((u) => u.role === "staff_office")!;
+  const otherUsers = DEMO_USERS.filter((u) => u.role !== "kowa" && u.role !== "staff_office");
+
   return (
-    <ul
-      role="list"
-      data-testid="demo-cards"
-      className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4"
-    >
-      {DEMO_USERS.map((u) => {
-        const isPending = pending === u.role;
-        return (
-          <li key={u.id}>
-            <button
-              type="button"
-              data-testid={`demo-card-${u.role}`}
-              data-demo-role={u.role}
-              disabled={pending !== null}
-              onClick={() => loginAs(u.role)}
-              aria-label={`${u.name} としてログイン`}
-              className={cn(
-                "group relative flex h-full w-full flex-col items-start gap-2 rounded-xl border bg-card p-4 text-left transition-all",
-                "hover:-translate-y-0.5 hover:border-amber-400 hover:shadow-md",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2",
-                "disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:hover:shadow-none",
-              )}
-            >
-              {/* アクセントバー */}
-              <span
-                aria-hidden
-                className={cn(
-                  "absolute inset-x-0 top-0 h-1 rounded-t-xl bg-gradient-to-r",
-                  u.accent,
-                )}
-              />
+    <div data-testid="demo-cards" className="mt-4 space-y-3">
+      {/* ───── メイン: 管理者 / 一般社員 の2大ボタン ───── */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        {/* 管理者 */}
+        <button
+          type="button"
+          data-testid="demo-card-kowa"
+          data-demo-role={adminUser.role}
+          disabled={pending !== null}
+          onClick={() => loginAs(adminUser.role)}
+          aria-label="管理者としてログイン"
+          className={cn(
+            "group relative flex flex-col items-center gap-2 rounded-xl border-2 border-amber-300 bg-gradient-to-br from-amber-50 via-white to-amber-50 p-5 text-center shadow-sm transition-all dark:border-amber-700 dark:from-amber-950/40 dark:via-slate-950 dark:to-amber-950/40",
+            "hover:-translate-y-0.5 hover:border-amber-500 hover:shadow-lg",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2",
+            "disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:hover:shadow-none",
+          )}
+        >
+          <span aria-hidden className="absolute inset-x-0 top-0 h-1 rounded-t-xl bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500" />
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-amber-500 text-white shadow">
+            {pending === adminUser.role ? (
+              <Loader2 className="h-6 w-6 animate-spin" />
+            ) : (
+              <Crown className="h-6 w-6" />
+            )}
+          </div>
+          <div>
+            <div className="text-base font-bold text-slate-900 dark:text-slate-50">管理者</div>
+            <div className="text-[11px] text-slate-500 dark:text-slate-400">{adminUser.name}（{adminUser.title}）</div>
+          </div>
+          <p className="text-[11px] leading-snug text-slate-600 dark:text-slate-400">
+            全機能・全データ閲覧 / ユーザー招待 / 設定変更
+          </p>
+        </button>
 
-              <div className="flex w-full items-center justify-between">
-                <span className="text-2xl" aria-hidden>
-                  {u.emoji}
-                </span>
-                {isPending ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
-                ) : (
-                  <span className="rounded-full bg-sumi-100 px-2 py-0.5 text-[10px] font-medium text-sumi-700 dark:bg-sumi-800 dark:text-sumi-200">
-                    {u.role}
-                  </span>
-                )}
-              </div>
+        {/* 一般社員 */}
+        <button
+          type="button"
+          data-testid="demo-card-staff_office"
+          data-demo-role={staffUser.role}
+          disabled={pending !== null}
+          onClick={() => loginAs(staffUser.role)}
+          aria-label="一般社員としてログイン"
+          className={cn(
+            "group relative flex flex-col items-center gap-2 rounded-xl border-2 border-emerald-300 bg-gradient-to-br from-emerald-50 via-white to-emerald-50 p-5 text-center shadow-sm transition-all dark:border-emerald-700 dark:from-emerald-950/40 dark:via-slate-950 dark:to-emerald-950/40",
+            "hover:-translate-y-0.5 hover:border-emerald-500 hover:shadow-lg",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2",
+            "disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:hover:shadow-none",
+          )}
+        >
+          <span aria-hidden className="absolute inset-x-0 top-0 h-1 rounded-t-xl bg-gradient-to-r from-emerald-500 via-emerald-400 to-emerald-500" />
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500 text-white shadow">
+            {pending === staffUser.role ? (
+              <Loader2 className="h-6 w-6 animate-spin" />
+            ) : (
+              <User className="h-6 w-6" />
+            )}
+          </div>
+          <div>
+            <div className="text-base font-bold text-slate-900 dark:text-slate-50">一般社員</div>
+            <div className="text-[11px] text-slate-500 dark:text-slate-400">{staffUser.name}（{staffUser.title}）</div>
+          </div>
+          <p className="text-[11px] leading-snug text-slate-600 dark:text-slate-400">
+            自分担当のチケット対応 / マッピング作業 / 通常業務
+          </p>
+        </button>
+      </div>
 
-              <div>
-                <div className="text-sm font-semibold leading-tight">{u.name}</div>
-                <div className="mt-0.5 text-[11px] text-muted-foreground">{u.title}</div>
-              </div>
+      {/* ───── サブ: 他のロールで試す（折りたたみ） ───── */}
+      <button
+        type="button"
+        onClick={() => setShowAll((v) => !v)}
+        className="mx-auto flex items-center gap-1 text-[11px] text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+      >
+        <ChevronDown className={cn("h-3 w-3 transition-transform", showAll && "rotate-180")} />
+        {showAll ? "他のロールを閉じる" : "他のロールで試す（営業ドライバー / 経理）"}
+      </button>
 
-              <p className="line-clamp-2 text-[11px] leading-snug text-muted-foreground">
-                {u.description}
-              </p>
+      {showAll && (
+        <ul role="list" className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {otherUsers.map((u) => {
+            const isPending = pending === u.role;
+            return (
+              <li key={u.id}>
+                <button
+                  type="button"
+                  data-testid={`demo-card-${u.role}`}
+                  data-demo-role={u.role}
+                  disabled={pending !== null}
+                  onClick={() => loginAs(u.role)}
+                  aria-label={`${u.name} としてログイン`}
+                  className={cn(
+                    "group relative flex h-full w-full items-center gap-3 rounded-lg border bg-card p-3 text-left transition-all",
+                    "hover:-translate-y-0.5 hover:border-slate-400 hover:shadow-sm",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 focus-visible:ring-offset-2",
+                    "disabled:cursor-not-allowed disabled:opacity-60",
+                  )}
+                >
+                  <span className="text-xl" aria-hidden>{u.emoji}</span>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-xs font-semibold leading-tight">{u.name}</div>
+                    <div className="text-[10px] text-muted-foreground">{u.title}</div>
+                  </div>
+                  {isPending && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
 
-              <div className="mt-auto flex flex-wrap gap-1 pt-2">
-                {u.permissions.slice(0, 3).map((p) => (
-                  <span
-                    key={p}
-                    className="rounded bg-amber-100/70 px-1.5 py-px text-[10px] font-medium text-amber-900 dark:bg-amber-900/40 dark:text-amber-100"
-                  >
-                    {p}
-                  </span>
-                ))}
-              </div>
-            </button>
-          </li>
-        );
-      })}
-    </ul>
+      <p className="pt-1 text-center text-[10px] text-muted-foreground">
+        ※ いずれのロールでもデモデータを閲覧できます。本番環境ではDEMO_MODEをOFFにします。
+      </p>
+    </div>
   );
 }
