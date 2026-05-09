@@ -114,9 +114,16 @@ export function getDemoUserById(id: string | null | undefined): DemoUser | null 
   return DEMO_USERS.find((u) => u.id === id) ?? null;
 }
 
-/** DEMO_MODE 判定 (サーバー / Edge どちらでも安全に動く) */
+/** DEMO_MODE 判定 (サーバー / クライアント / Edge どちらでも安全に動く)
+ *  - Server Component: DEMO_MODE が見える
+ *  - Client Component: NEXT_PUBLIC_DEMO_MODE が見える
+ *  - 両方を OR で見ることで、ビルド時の inline と実行時の env 両方をカバー
+ */
 export function isDemoMode(): boolean {
-  return process.env.DEMO_MODE === "true";
+  return (
+    process.env.DEMO_MODE === "true" ||
+    process.env.NEXT_PUBLIC_DEMO_MODE === "true"
+  );
 }
 
 /**
