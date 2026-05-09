@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
@@ -12,19 +13,41 @@ import {
   Settings,
   ChevronRight,
   Sparkles,
+  Users,
 } from "lucide-react";
 
-const NAV = [
-  { href: "/", label: "ダッシュボード", icon: LayoutDashboard, badge: null as string | null },
+type NavItem = {
+  href: string;
+  label: string;
+  icon: typeof LayoutDashboard;
+  badge: string | null;
+  /** 表示権限。未指定なら全員 */
+  roles?: ReadonlyArray<string>;
+};
+
+const ADMIN_ROLES = ["kowa", "manager", "finance"] as const;
+
+const NAV: ReadonlyArray<NavItem> = [
+  { href: "/", label: "ダッシュボード", icon: LayoutDashboard, badge: null },
   { href: "/tickets", label: "チケット一覧", icon: ListChecks, badge: null },
   { href: "/kanban", label: "カンバン", icon: KanbanSquare, badge: null },
   { href: "/chat", label: "チャット統合", icon: MessagesSquare, badge: "NEW" },
   { href: "/mappings", label: "マッピング管理", icon: Link2, badge: null },
-  { href: "/settings", label: "設定", icon: Settings, badge: null },
+  {
+    href: "/admin/users",
+    label: "ユーザー管理",
+    icon: Users,
+    badge: null,
+    roles: ADMIN_ROLES,
+  },
+  { href: "/settings", label: "設定", icon: Settings, badge: null, roles: ADMIN_ROLES },
 ];
 
 export function Sidebar() {
   const pathname = usePathname();
+  const { data: session } = useSession();
+  const role = (session?.user as { role?: string } | undefined)?.role;
+  const items = NAV.filter((n) => !n.roles || (role && n.roles.includes(role)));
   return (
     <aside className="hidden w-60 shrink-0 border-r bg-sumi-50/60 dark:bg-sumi-900/60 lg:flex lg:flex-col">
       <div className="flex h-14 items-center gap-2 border-b px-4">
@@ -38,7 +61,7 @@ export function Sidebar() {
       </div>
 
       <nav className="flex-1 space-y-0.5 p-3">
-        {NAV.map((item) => {
+        {items.map((item) => {
           const Icon = item.icon;
           const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
           return (

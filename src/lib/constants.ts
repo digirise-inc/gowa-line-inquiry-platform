@@ -98,3 +98,51 @@ export const MAPPING_STATUS = [
   { value: "multiple_candidates", label: "複数候補", color: "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-200" },
   { value: "failed", label: "該当なし", color: "bg-sumi-200 text-sumi-700 dark:bg-sumi-800 dark:text-sumi-300" },
 ];
+
+// ─────────────────────────────────────────────
+// ロール / 招待関連
+// ─────────────────────────────────────────────
+/** 招待時に付与可能な Prisma 側ロール allowlist */
+export const INVITATION_ROLES = [
+  "manager",
+  "staff_office",
+  "staff_field",
+  "finance",
+  "driver",
+] as const;
+export type InvitationRole = (typeof INVITATION_ROLES)[number];
+
+export const INVITATION_ROLE_LABEL: Record<InvitationRole, string> = {
+  manager: "マネージャー / 管理者",
+  staff_office: "管理部・事務員",
+  staff_field: "現場スタッフ",
+  driver: "配送ドライバー",
+  finance: "経理 / 横断管理",
+};
+
+/** 管理者(招待・ユーザー編集 権限) と判定するロール (Prismaロール / デモロール混在) */
+export const MANAGER_ROLES = ["manager", "kowa"] as const;
+
+/** /admin/* にアクセス可能なロール (manager に加え finance を含む) */
+export const ADMIN_AREA_ROLES = ["manager", "kowa", "finance"] as const;
+
+export const INVITATION_STATUSES = ["pending", "accepted", "expired", "revoked"] as const;
+export type InvitationStatus = (typeof INVITATION_STATUSES)[number];
+
+/** 招待ロールに対するデフォルト権限セット */
+export function defaultPermissionsForRole(role: InvitationRole): string[] {
+  switch (role) {
+    case "manager":
+      return ["admin", "manager", "view_all"];
+    case "finance":
+      return ["view_all", "kpi"];
+    case "staff_office":
+      return ["view_assigned", "create_ticket", "mapping"];
+    case "staff_field":
+      return ["view_self", "mobile"];
+    case "driver":
+      return ["view_self", "mobile"];
+    default:
+      return ["view_self"];
+  }
+}

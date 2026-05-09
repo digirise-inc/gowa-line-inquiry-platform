@@ -18,16 +18,24 @@ model User {
   email         String?   @unique
   emailVerified DateTime?
   image         String?
-  role          String    @default("staff_office") // manager | staff_office | staff_field
+  role          String    @default("staff_office") // manager | staff_office | staff_field | finance | driver
   position      String? // 役職表記 (例: 専務 / 事務員)
+  title         String? // 役職表記 (互換用、position と同期)
+  permissions   String? // JSON array: ["admin","manager","view_all", ...]
+  isActive      Boolean   @default(true) // false で無効化
   accounts      Account[]
   sessions      Session[]
   // ドメイン関連
   ownedTickets   Ticket[]   @relation("TicketAssignee")
   authoredMsg    Message[]  @relation("MessageSender")
   linkedMappings LineMapping[] @relation("MappingLinker")
+  invitations    Invitation[] @relation("UserInvitations")
+  auditLogs      AuditLog[]   @relation("AuditActor")
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
+
+  @@index([role])
+  @@index([isActive])
 }
 
 model Account {
@@ -239,4 +247,72 @@ model GchatMessage {
   senderImg  String?
   content    String
   createdAt  DateTime @default(now())
+}
+
+// ─────────────────────────────────────────────
+// ユーザー招待
+// ─────────────────────────────────────────────
+model Invitation {
+  id          String    @id @default(cuid())
+  email       String    @unique
+  name        String?
+  role        String // manager | staff_office | staff_field | finance | driver
+  title       String?
+  permissions String? // JSON array
+  token       String    @unique // 招待トークン (URL-safe)
+  expiresAt   DateTime
+  status      String    @default("pending") // pending | accepted | expired | revoked
+  invitedById String
+  invitedBy   User      @relation("UserInvitations", fields: [invitedById], references: [id])
+  acceptedAt  DateTime?
+  message     String? // 招待時のカスタムメッセージ
+  emailLogs   InviteEmailLog[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([status])
+  @@index([token])
+  @@index([expiresAt])
+}
+
+// ─────────────────────────────────────────────
+// 招待メール送信ログ
+// ─────────────────────────────────────────────
+model InviteEmailLog {
+  id            String     @id @default(cuid())
+  invitationId  String
+  invitation    Invitation @relation(fields: [invitationId], references: [id], onDelete: Cascade)
+  toEmail       String
+  subject       String
+  bodyText      String
+  bodyHtml      String?
+  status        String     @default("queued") // queued | sent | failed | bounced
+  providerMsgId String?
+  errorMessage  String?
+  sentAt        DateTime?
+  createdAt     DateTime   @default(now())
+
+  @@index([invitationId])
+  @@index([status])
+}
+
+// ─────────────────────────────────────────────
+// 監査ログ
+// ─────────────────────────────────────────────
+model AuditLog {
+  id           String   @id @default(cuid())
+  actorId      String?
+  actor        User?    @relation("AuditActor", fields: [actorId], references: [id])
+  actorEmail   String? // actorIdがnull(公開API)時の表示用
+  action       String // invitation.created | invitation.revoked | invitation.accepted | user.role_changed | user.deactivated ...
+  targetType   String // invitation | user
+  targetId     String
+  metadata     String? // JSON
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime @default(now())
+
+  @@index([actorId])
+  @@index([targetType, targetId])
+  @@index([createdAt])
 }

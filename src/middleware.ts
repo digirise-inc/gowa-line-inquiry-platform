@@ -8,13 +8,19 @@ const PUBLIC_PATHS = [
   "/_next",
   "/favicon",
   "/api/health",
+  // 招待受諾フローは未認証ユーザーが触る
+  "/invite",
+  "/api/invitations/accept",
 ];
 
 /**
  * 管理者/マネージャー専用ルート (デモロール: kowa / finance / manager)
- * driver / staff_office はアクセスすると / にリダイレクト (denied=… を付与)
+ * driver / staff_office / staff_field はアクセスすると / にリダイレクト (denied=… を付与)
+ *
+ * `/admin/users` は spec 上 manager / finance / kowa が利用するので
+ * `ADMIN_ROLES` セットを共通利用する (finance を除外しない)。
  */
-const ADMIN_ONLY_PREFIXES = ["/settings"];
+const ADMIN_ONLY_PREFIXES = ["/settings", "/admin"];
 const ADMIN_ROLES = new Set(["kowa", "finance", "manager"]);
 
 export default auth((req) => {
@@ -29,9 +35,10 @@ export default auth((req) => {
     return NextResponse.redirect(url);
   }
 
+  const role = (req.auth.user as { role?: string } | undefined)?.role;
+
   // 権限ガード: 管理者専用ルートは ADMIN_ROLES のみ通す
   if (ADMIN_ONLY_PREFIXES.some((p) => pathname.startsWith(p))) {
-    const role = (req.auth.user as { role?: string } | undefined)?.role;
     if (!role || !ADMIN_ROLES.has(role)) {
       const url = req.nextUrl.clone();
       url.pathname = "/";

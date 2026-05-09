@@ -690,13 +690,41 @@ async function main() {
   await db.ticket.deleteMany();
   await db.lineMapping.deleteMany();
   await db.customer.deleteMany();
+  // Invitation/AuditLog/InviteEmailLog: User より先に消す (FK)
+  await db.inviteEmailLog.deleteMany();
+  await db.invitation.deleteMany();
+  await db.auditLog.deleteMany();
   await db.session.deleteMany();
   await db.account.deleteMany();
   await db.user.deleteMany();
 
   console.log("Seeding users...");
+  // role -> デフォルト permissions の対応 (constants.defaultPermissionsForRole と同期)
+  const permissionsForRole = (role: string): string[] => {
+    switch (role) {
+      case "manager":
+        return ["admin", "manager", "view_all"];
+      case "finance":
+        return ["view_all", "kpi"];
+      case "staff_office":
+        return ["view_assigned", "create_ticket", "mapping"];
+      case "staff_field":
+      case "driver":
+        return ["view_self", "mobile"];
+      default:
+        return ["view_self"];
+    }
+  };
   for (const u of usersSeed) {
-    await db.user.create({ data: u });
+    await db.user.create({
+      data: {
+        ...u,
+        title: u.position,
+        permissions: JSON.stringify(permissionsForRole(u.role)),
+        isActive: true,
+        emailVerified: subDays(now, 30),
+      },
+    });
   }
 
   console.log("Seeding customers...");
@@ -840,12 +868,265 @@ async function main() {
     });
   }
 
+  console.log("Seeding invitations...");
+  // 固定トークン: デモ動作確認のため (本番では generateInviteToken() を使う)
+  const invitationsSeed = [
+    // pending 3件 — 異なるロール / 異なる期限
+    {
+      id: "inv_pending_yamada",
+      email: "yamada@gowa58.co.jp",
+      name: "山田 太郎",
+      role: "staff_office",
+      title: "管理部 (新人)",
+      permissions: JSON.stringify(["view_assigned", "create_ticket", "mapping"]),
+      token: "demo_token_yamada_pending_001abcdefghijklmnopqrstuvwxyz",
+      expiresAt: addDays(now, 6),
+      status: "pending",
+      invitedById: "demo-kowa",
+      message: "山田さん、業務管理プラットフォーム使い始めましょう。\n初週は中尾さんとペアで触ってみてください。",
+      createdAt: subDays(now, 1),
+    },
+    {
+      id: "inv_pending_satoh",
+      email: "satoh-driver@gowa58.co.jp",
+      name: "佐藤 健",
+      role: "driver",
+      title: "営業ドライバー (新人)",
+      permissions: JSON.stringify(["view_self", "mobile"]),
+      token: "demo_token_satoh_pending_002abcdefghijklmnopqrstuvwxyz",
+      expiresAt: addDays(now, 3),
+      status: "pending",
+      invitedById: "demo-kowa",
+      message: "佐藤さん、配送ルート用のスマホUIで使ってみてください。",
+      createdAt: subDays(now, 4),
+    },
+    {
+      id: "inv_pending_morimoto",
+      email: "morimoto@gowa58.co.jp",
+      name: "森本 京子",
+      role: "finance",
+      title: "経理 (パート)",
+      permissions: JSON.stringify(["view_all", "kpi"]),
+      token: "demo_token_morimoto_pending_003abcdefghijklmnopqrstuvw",
+      expiresAt: addHours(now, 12), // 直近で切れそう
+      status: "pending",
+      invitedById: "demo-kowa",
+      message: null,
+      createdAt: subDays(now, 6),
+    },
+    // accepted 2件
+    {
+      id: "inv_accepted_kondoh",
+      email: "kondoh@gowa58.co.jp",
+      name: "近藤 修",
+      role: "staff_field",
+      title: "倉庫担当",
+      permissions: JSON.stringify(["view_self", "mobile"]),
+      token: "demo_token_kondoh_accepted_004abcdefghijklmnopqrstuv",
+      expiresAt: subDays(now, 5),
+      status: "accepted",
+      invitedById: "demo-kowa",
+      acceptedAt: subDays(now, 12),
+      message: null,
+      createdAt: subDays(now, 14),
+    },
+    {
+      id: "inv_accepted_okada",
+      email: "okada@gowa58.co.jp",
+      name: "岡田 翔",
+      role: "staff_office",
+      title: "管理部・補佐",
+      permissions: JSON.stringify(["view_assigned", "create_ticket", "mapping"]),
+      token: "demo_token_okada_accepted_005abcdefghijklmnopqrstuvw",
+      expiresAt: subDays(now, 1),
+      status: "accepted",
+      invitedById: "demo-kowa",
+      acceptedAt: subDays(now, 8),
+      message: "岡田さん、ようこそ。",
+      createdAt: subDays(now, 10),
+    },
+    // revoked 1件
+    {
+      id: "inv_revoked_temp",
+      email: "temp-spam@example.com",
+      name: null,
+      role: "staff_office",
+      title: null,
+      permissions: JSON.stringify(["view_assigned"]),
+      token: "demo_token_revoked_006abcdefghijklmnopqrstuvwxyz1234",
+      expiresAt: addDays(now, 7),
+      status: "revoked",
+      invitedById: "demo-kowa",
+      message: null,
+      createdAt: subDays(now, 3),
+    },
+    // expired 1件 (UI動作確認用 / 過去日)
+    {
+      id: "inv_expired_legacy",
+      email: "legacy-staff@gowa58.co.jp",
+      name: "(期限切れ招待)",
+      role: "staff_office",
+      title: null,
+      permissions: JSON.stringify(["view_assigned"]),
+      token: "demo_token_expired_007abcdefghijklmnopqrstuvwxyz1234",
+      expiresAt: subDays(now, 2),
+      status: "expired",
+      invitedById: "demo-kowa",
+      message: null,
+      createdAt: subDays(now, 12),
+    },
+  ];
+
+  for (const inv of invitationsSeed) {
+    await db.invitation.create({ data: inv as any });
+  }
+
+  console.log("Seeding invite email logs...");
+  // 各招待につき 1〜3件のログ (送信成功 / 再送 / 失敗 のバリエーション)
+  const emailLogs = [
+    // pending Yamada — 1件 (sent)
+    {
+      invitationId: "inv_pending_yamada",
+      toEmail: "yamada@gowa58.co.jp",
+      subject: "【業務管理プラットフォーム】後和 直樹様より招待が届いています",
+      bodyText: "山田 太郎様\n\n後和 直樹さんより招待が届いています...",
+      status: "sent",
+      providerMsgId: "mock_msg_001",
+      sentAt: subDays(now, 1),
+      createdAt: subDays(now, 1),
+    },
+    // pending Satoh — 2件 (初回sent + 再送sent)
+    {
+      invitationId: "inv_pending_satoh",
+      toEmail: "satoh-driver@gowa58.co.jp",
+      subject: "【業務管理プラットフォーム】後和 直樹様より招待が届いています",
+      bodyText: "佐藤 健様\n...",
+      status: "sent",
+      providerMsgId: "mock_msg_002",
+      sentAt: subDays(now, 4),
+      createdAt: subDays(now, 4),
+    },
+    {
+      invitationId: "inv_pending_satoh",
+      toEmail: "satoh-driver@gowa58.co.jp",
+      subject: "【業務管理プラットフォーム】後和 直樹様より招待が届いています",
+      bodyText: "佐藤 健様\n(再送)\n...",
+      status: "sent",
+      providerMsgId: "mock_msg_002b",
+      sentAt: subDays(now, 1),
+      createdAt: subDays(now, 1),
+    },
+    // pending Morimoto — 1件 sent
+    {
+      invitationId: "inv_pending_morimoto",
+      toEmail: "morimoto@gowa58.co.jp",
+      subject: "【業務管理プラットフォーム】後和 直樹様より招待が届いています",
+      bodyText: "森本 京子様\n...",
+      status: "sent",
+      providerMsgId: "mock_msg_003",
+      sentAt: subDays(now, 6),
+      createdAt: subDays(now, 6),
+    },
+    // accepted Kondoh — 1件 sent
+    {
+      invitationId: "inv_accepted_kondoh",
+      toEmail: "kondoh@gowa58.co.jp",
+      subject: "【業務管理プラットフォーム】後和 直樹様より招待が届いています",
+      bodyText: "近藤 修様\n...",
+      status: "sent",
+      providerMsgId: "mock_msg_004",
+      sentAt: subDays(now, 14),
+      createdAt: subDays(now, 14),
+    },
+    // accepted Okada — 1件 sent
+    {
+      invitationId: "inv_accepted_okada",
+      toEmail: "okada@gowa58.co.jp",
+      subject: "【業務管理プラットフォーム】後和 直樹様より招待が届いています",
+      bodyText: "岡田 翔様\n...",
+      status: "sent",
+      providerMsgId: "mock_msg_005",
+      sentAt: subDays(now, 10),
+      createdAt: subDays(now, 10),
+    },
+    // revoked — 1件 sent + 失敗例
+    {
+      invitationId: "inv_revoked_temp",
+      toEmail: "temp-spam@example.com",
+      subject: "【業務管理プラットフォーム】後和 直樹様より招待が届いています",
+      bodyText: "...",
+      status: "failed",
+      errorMessage: "550 5.1.1 Recipient address rejected (mock)",
+      sentAt: null,
+      createdAt: subDays(now, 3),
+    },
+    // expired — 1件 sent
+    {
+      invitationId: "inv_expired_legacy",
+      toEmail: "legacy-staff@gowa58.co.jp",
+      subject: "【業務管理プラットフォーム】後和 直樹様より招待が届いています",
+      bodyText: "(legacy)",
+      status: "sent",
+      providerMsgId: "mock_msg_007",
+      sentAt: subDays(now, 12),
+      createdAt: subDays(now, 12),
+    },
+  ];
+  for (const l of emailLogs) {
+    await db.inviteEmailLog.create({ data: l as any });
+  }
+
+  console.log("Seeding audit logs (sample)...");
+  await db.auditLog.createMany({
+    data: [
+      {
+        actorId: "demo-kowa",
+        actorEmail: "demo+kowa@gowa58.co.jp",
+        action: "invitation.created",
+        targetType: "invitation",
+        targetId: "inv_pending_yamada",
+        metadata: JSON.stringify({ email: "yamada@gowa58.co.jp", role: "staff_office" }),
+        createdAt: subDays(now, 1),
+      },
+      {
+        actorId: "demo-kowa",
+        actorEmail: "demo+kowa@gowa58.co.jp",
+        action: "invitation.resent",
+        targetType: "invitation",
+        targetId: "inv_pending_satoh",
+        metadata: JSON.stringify({ email: "satoh-driver@gowa58.co.jp" }),
+        createdAt: subDays(now, 1),
+      },
+      {
+        actorId: "demo-kowa",
+        actorEmail: "demo+kowa@gowa58.co.jp",
+        action: "invitation.revoked",
+        targetType: "invitation",
+        targetId: "inv_revoked_temp",
+        metadata: JSON.stringify({ email: "temp-spam@example.com" }),
+        createdAt: subDays(now, 2),
+      },
+      {
+        actorId: "demo-kowa",
+        actorEmail: "demo+kowa@gowa58.co.jp",
+        action: "invitation.accepted",
+        targetType: "invitation",
+        targetId: "inv_accepted_kondoh",
+        metadata: JSON.stringify({ email: "kondoh@gowa58.co.jp" }),
+        createdAt: subDays(now, 12),
+      },
+    ],
+  });
+
   console.log("Done. Counts:");
-  console.log("  users     :", await db.user.count());
-  console.log("  customers :", await db.customer.count());
-  console.log("  mappings  :", await db.lineMapping.count());
-  console.log("  tickets   :", await db.ticket.count());
-  console.log("  messages  :", await db.message.count());
+  console.log("  users       :", await db.user.count());
+  console.log("  customers   :", await db.customer.count());
+  console.log("  mappings    :", await db.lineMapping.count());
+  console.log("  tickets     :", await db.ticket.count());
+  console.log("  messages    :", await db.message.count());
+  console.log("  invitations :", await db.invitation.count());
+  console.log("  emailLogs   :", await db.inviteEmailLog.count());
+  console.log("  auditLogs   :", await db.auditLog.count());
 }
 
 main()

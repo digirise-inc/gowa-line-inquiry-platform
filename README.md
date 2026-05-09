@@ -13,6 +13,23 @@
 
 ---
 
+## スクリーンショット
+
+| 画面 | プレビュー |
+|---|---|
+| ログイン | `docs/screenshots/01-login.png` |
+| ダッシュボード | `docs/screenshots/02-dashboard.png` |
+| チケット一覧 | `docs/screenshots/03-tickets.png` |
+| カンバン (8段階FSM) | `docs/screenshots/04-kanban.png` |
+| チャット統合 (LINE/GChat/Mail) | `docs/screenshots/05-chat.png` |
+| マッピング管理 | `docs/screenshots/06-mappings.png` |
+| 設定 | `docs/screenshots/07-settings.png` |
+| チケット詳細 | `docs/screenshots/08-ticket-detail.png` |
+
+スクリーンショット一括再生成: `node scripts/screenshots.mjs`（要 dev server 起動）
+
+---
+
 ## クイックスタート (5分)
 
 ```bash

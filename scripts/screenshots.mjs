@@ -27,8 +27,11 @@ async function main() {
   // login as kowa
   await page.goto(`${baseURL}/login`);
   await page.waitForSelector('[data-testid="demo-card-kowa"]');
-  await page.click('[data-testid="demo-card-kowa"]');
-  await page.waitForURL((u) => !u.pathname.startsWith("/login"));
+  await Promise.all([
+    page.waitForURL((u) => !new URL(u).pathname.startsWith("/login"), { timeout: 30_000 }).catch(() => null),
+    page.click('[data-testid="demo-card-kowa"]'),
+  ]);
+  await page.waitForLoadState("networkidle");
 
   for (const p of PAGES) {
     console.log(`Capturing ${p.name}...`);
