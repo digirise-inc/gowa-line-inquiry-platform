@@ -109,7 +109,7 @@ export default async function TicketDetailPage({ params }: { params: { id: strin
                 {ticket.messages.length === 0 ? (
                   <div className="py-6 text-center text-sm text-muted-foreground">まだメッセージはありません</div>
                 ) : (
-                  ticket.messages.map((m) => (
+                  ticket.messages.map((m: any) => (
                     <MessageBubble
                       key={m.id}
                       msg={{
