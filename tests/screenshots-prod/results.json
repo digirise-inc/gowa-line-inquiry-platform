@@ -1,0 +1,232 @@
+{
+  "passed": 45,
+  "failed": 0,
+  "total": 45,
+  "tests": [
+    {
+      "name": "G1.1 業務管理プラットフォーム表示",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "G1.2 Googleログインボタン表示",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "G1.3 管理者ボタン表示",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "G1.4 一般社員ボタン表示",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "G1.5 折りたたみボタン表示",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "G1.6 デモバナー表示",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "G1.7 pageerror 0件",
+      "ok": true,
+      "detail": "errs=0"
+    },
+    {
+      "name": "G2.0 展開前: driverカード非表示",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "G2.1 展開後: 田中 健 表示",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "G2.2 展開後: 辻野 和彦 表示",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "G2.3 driverカード表示",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "G2.4 financeカード表示",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "G3.1 ダッシュボード遷移",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "G3.2 「後和 直樹」表示",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "G3.3 「専務」表示",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "G3.4 KPI「未対応」表示",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "G3.5 KPI「対応中」表示",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "G3.6 KPI「完了」表示",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "G3.7 KPI「失注」表示",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "G3.8 ユーザー管理リンク表示（manager only）",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "G3.9 設定リンク表示",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "G3.10 Application error なし",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "G3.11 /tickets 表示",
+      "ok": true,
+      "detail": "len=282"
+    },
+    {
+      "name": "G3.12 /kanban 表示",
+      "ok": true,
+      "detail": "len=454"
+    },
+    {
+      "name": "G3.13 /chat 表示",
+      "ok": true,
+      "detail": "len=151"
+    },
+    {
+      "name": "G3.14 /mappings 表示",
+      "ok": true,
+      "detail": "len=151"
+    },
+    {
+      "name": "G3.15 /admin/users 表示（manager OK）",
+      "ok": true,
+      "detail": "len=846"
+    },
+    {
+      "name": "G3.16 /settings 表示（manager OK）",
+      "ok": true,
+      "detail": "len=1008"
+    },
+    {
+      "name": "G4.1 ダッシュボード遷移",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "G4.2 「中尾 花子」表示",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "G4.3 「管理部・事務員」表示",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "G4.4 ユーザー管理リンク非表示（権限差分）",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "G4.5 /admin/users 一般社員アクセス → リダイレクト",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "G5.1 ドライバーログイン → ダッシュボード",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "G5.2 「田中 健」表示",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "G5.3 「営業ドライバー」表示",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "G5.4 ユーザー管理非表示",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "G6.1 経理ログイン → ダッシュボード",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "G6.2 「辻野 和彦」表示",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "G6.3 「経理 / 横断管理」表示",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "G6.4 ユーザー管理リンク表示（financeも管理者扱い）",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "G7.1 /invite/[token] 公開ページ表示",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "G7.2 Application error なし",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "G8.1 初回: 後和ログイン",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "G8.2 切替後: 中尾ログイン",
+      "ok": true,
+      "detail": ""
+    }
+  ]
+}
