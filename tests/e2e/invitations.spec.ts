@@ -87,7 +87,7 @@ test.describe("Invitation API (manager 権限)", () => {
     expect(body.data.invitation.email).toBe(email);
     expect(body.data.invitation.status).toBe("pending");
     expect(body.data.invitation.token).toMatch(/[A-Za-z0-9_-]{40,}/);
-    expect(body.data.inviteUrl).toContain("/invite/accept?token=");
+    expect(body.data.inviteUrl).toContain("/invite/");
     expect(body.data.email.sent).toBe(true);
     expect(body.data.email.logId).toBeTruthy();
 

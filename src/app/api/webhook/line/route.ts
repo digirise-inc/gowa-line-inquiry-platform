@@ -22,10 +22,16 @@ export async function POST(req: Request) {
   const rawBody = await req.text();
   const channelSecret = process.env.LINE_CHANNEL_SECRET ?? "";
 
-  // DEMO_MODE: 署名検証をスキップしてパススルー
-  if (!isDemoMode() && channelSecret) {
-    const valid = verifyLineSignature(rawBody, signature, channelSecret);
-    if (!valid) {
+  // DEMO_MODE 以外では署名検証を必須にする。secret 未設定でも受信を通さない。
+  if (!isDemoMode()) {
+    if (!channelSecret) {
+      console.warn("LINE Webhook: missing channel secret");
+      return new NextResponse(JSON.stringify({ error: "webhook not configured" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (!verifyLineSignature(rawBody, signature, channelSecret)) {
       console.warn("LINE Webhook: invalid signature");
       return new NextResponse(JSON.stringify({ error: "invalid signature" }), {
         status: 401,

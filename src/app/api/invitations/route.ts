@@ -214,7 +214,7 @@ function buildInviteUrl(req: Request, token: string): string {
     process.env.NEXTAUTH_URL ||
     process.env.NEXT_PUBLIC_APP_URL ||
     new URL(req.url).origin;
-  return `${base.replace(/\/$/, "")}/invite/accept?token=${encodeURIComponent(token)}`;
+  return `${base.replace(/\/$/, "")}/invite/${encodeURIComponent(token)}`;
 }
 
 // serializeInvitation / parsePermissions は src/lib/invitations.ts に分離済み

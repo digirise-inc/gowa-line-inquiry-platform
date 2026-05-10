@@ -18,7 +18,13 @@ export async function POST(req: Request) {
   const auth = req.headers.get("authorization") ?? "";
   const expected = process.env.GCHAT_VERIFICATION_TOKEN ?? "";
 
-  if (!isDemoMode() && expected) {
+  if (!isDemoMode()) {
+    if (!expected) {
+      return new NextResponse(JSON.stringify({ error: "webhook not configured" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
     if (auth !== `Bearer ${expected}`) {
       return new NextResponse(JSON.stringify({ error: "unauthorized" }), {
         status: 401,

@@ -182,7 +182,7 @@ export async function sendInviteEmail(
   if (isDemoMode() || !process.env.RESEND_API_KEY) {
     // eslint-disable-next-line no-console
     console.log(
-      `[email:mock] ➜ ${params.to}\n  subject: ${subject}\n  url: ${params.inviteUrl}\n  log: ${log.id}`,
+      `[email:mock] -> ${params.to}\n  subject: ${subject}\n  url: ${redactInviteUrl(params.inviteUrl)}\n  log: ${log.id}`,
     );
     const updated = await db.inviteEmailLog.update({
       where: { id: log.id },
@@ -236,4 +236,23 @@ export async function sendInviteEmail(
     });
     return { ok: false, errorMessage: updated.errorMessage ?? undefined, logId: log.id };
   }
+}
+
+function redactInviteUrl(inviteUrl: string): string {
+  try {
+    const url = new URL(inviteUrl);
+    if (url.searchParams.has("token")) {
+      url.searchParams.set("token", "[redacted]");
+      return url.toString();
+    }
+    const parts = url.pathname.split("/");
+    if (parts[1] === "invite" && parts[2]) {
+      parts[2] = "[redacted]";
+      url.pathname = parts.join("/");
+      return url.toString();
+    }
+  } catch {
+    // Relative URL or unexpected format: keep only the route shape.
+  }
+  return inviteUrl.replace(/(\/invite\/)[^/?#]+/, "$1[redacted]");
 }
