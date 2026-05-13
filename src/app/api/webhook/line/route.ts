@@ -5,15 +5,14 @@
  * SPEC §3.1.2:
  *  - X-Line-Signature 検証 (HMAC-SHA256, base64) — DEMO_MODE はスキップ
  *  - 即 200 を返す (LINE仕様)
- *  - 重い処理は非同期キューに渡す (今回は LineMessageLog 書き込み + setImmediate でmock)
- *
- * Webhook 署名検証失敗時のみ 401。raw body を読むため bytes で受ける。
+ *  - LineMessageLog 書き込み → Ticket作成 or 既存Ticketへ追記
  */
 
 import { NextResponse } from "next/server";
 import { db } from "@/lib/prisma";
 import { verifyLineSignature, normalizeLineMessage } from "@/lib/line";
 import { isDemoMode } from "@/lib/api";
+import { sendGchatNotification } from "@/lib/gchat";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +21,6 @@ export async function POST(req: Request) {
   const rawBody = await req.text();
   const channelSecret = process.env.LINE_CHANNEL_SECRET ?? "";
 
-  // DEMO_MODE 以外では署名検証を必須にする。secret 未設定でも受信を通さない。
   if (!isDemoMode()) {
     if (!channelSecret) {
       console.warn("LINE Webhook: missing channel secret");
@@ -52,8 +50,6 @@ export async function POST(req: Request) {
 
   const events: any[] = payload?.events ?? [];
 
-  // 即 200 を返すため処理は非同期 (Promise.all を await しない)
-  // mock では即時実行しても後続のレスポンスに影響しないので await なしで叩く
   void processEvents(events).catch((e) => console.error("LINE event processing error", e));
 
   return NextResponse.json({ ok: true, queued: events.length });
@@ -67,8 +63,11 @@ async function processEvents(events: any[]) {
     const messageType = event.message?.type ?? null;
 
     const norm = normalizeLineMessage(event);
-    const webhookEventId = event.webhookEventId ?? `evt_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const webhookEventId =
+      event.webhookEventId ??
+      `evt_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
+    // LineMessageLog を先に書いて重複を防ぐ
     try {
       await db.lineMessageLog.create({
         data: {
@@ -83,11 +82,11 @@ async function processEvents(events: any[]) {
         },
       });
     } catch {
-      // 重複 webhookEventId は無視
+      // 重複 webhookEventId はスキップ
       continue;
     }
 
-    // mapping upsert
+    // LineMapping を upsert
     if (lineUserId) {
       const mapping = await db.lineMapping.findUnique({ where: { lineUserId } });
       if (mapping) {
@@ -111,10 +110,92 @@ async function processEvents(events: any[]) {
         });
       }
     }
+
+    // message イベントのみ Ticket に反映
+    if (eventType !== "message" || !lineUserId) continue;
+
+    const mapping = await db.lineMapping.findUnique({ where: { lineUserId } });
+    const customerId =
+      mapping?.status === "linked" ? (mapping.customerId ?? undefined) : undefined;
+    const senderName =
+      mapping?.displayName ?? event.source?.userName ?? lineUserId;
+    const sentAt = event.timestamp ? new Date(event.timestamp) : new Date();
+
+    // 同ユーザーのオープン中チケットを探す（クローズ済みは除外）
+    const existingTicket = await db.ticket.findFirst({
+      where: {
+        lineUserId,
+        status: { notIn: ["closed_won", "closed_lost", "answered"] },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    let ticketId: string;
+
+    if (existingTicket) {
+      // 既存チケットにメッセージを追記
+      await db.message.create({
+        data: {
+          ticketId: existingTicket.id,
+          direction: "inbound",
+          channel: "line",
+          senderName,
+          contentType: norm.kind,
+          content: norm.display,
+          lineMessageId: messageId ?? undefined,
+          sentAt,
+        },
+      });
+      ticketId = existingTicket.id;
+      void sendGchatNotification(`💬 チケット追記 [${existingTicket.publicId}]\n👤 ${senderName}\n💬 ${norm.display.slice(0, 100)}`);
+    } else {
+      // 新規チケット作成
+      const count = await db.ticket.count();
+      const publicId = `TKT-${String(count + 1001).padStart(4, "0")}`;
+      const subject =
+        norm.kind === "text"
+          ? norm.display.slice(0, 80)
+          : `${senderName}: ${norm.display}`;
+
+      const ticket = await db.ticket.create({
+        data: {
+          publicId,
+          subject,
+          preview: norm.display.slice(0, 200),
+          channel: "official_line",
+          kind: "inbound",
+          category: "inquiry",
+          status: "open",
+          priority: "normal",
+          lineUserId,
+          isUnmapped: !customerId,
+          customerId: customerId ?? undefined,
+          customerName: senderName,
+          messages: {
+            create: {
+              direction: "inbound",
+              channel: "line",
+              senderName,
+              contentType: norm.kind,
+              content: norm.display,
+              lineMessageId: messageId ?? undefined,
+              sentAt,
+            },
+          },
+        },
+      });
+      ticketId = ticket.id;
+      void sendGchatNotification(`🎫 新規チケット作成 [${ticket.publicId}]\n👤 ${senderName}\n💬 ${norm.display.slice(0, 100)}`);
+    }
+
+    // LineMessageLog にチケットIDを記録
+    await db.lineMessageLog.update({
+      where: { webhookEventId },
+      data: { ticketId },
+    });
   }
 }
 
 export async function GET() {
-  // ヘルスチェック用
   return NextResponse.json({ ok: true, endpoint: "line-webhook" });
 }

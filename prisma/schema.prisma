@@ -112,6 +112,8 @@ model Ticket {
   // LINE
   lineUserId      String?
   isUnmapped      Boolean  @default(false)
+  // Google Chat
+  gchatThreadKey  String?
   // 担当
   assigneeId      String?
   assignee        User?    @relation("TicketAssignee", fields: [assigneeId], references: [id])
@@ -138,6 +140,7 @@ model Ticket {
   @@index([assigneeId])
   @@index([lineUserId])
   @@index([customerId])
+  @@index([gchatThreadKey])
 }
 
 // ─────────────────────────────────────────────
