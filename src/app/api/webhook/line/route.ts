@@ -13,6 +13,27 @@ import { db } from "@/lib/prisma";
 import { verifyLineSignature, normalizeLineMessage } from "@/lib/line";
 import { isDemoMode } from "@/lib/api";
 import { sendGchatNotification } from "@/lib/gchat";
+import Anthropic from "@anthropic-ai/sdk";
+
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+async function isNewTopic(existingSubject: string, newMessage: string): Promise<boolean> {
+  if (!process.env.ANTHROPIC_API_KEY) return false;
+  try {
+    const res = await anthropic.messages.create({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 16,
+      messages: [{
+        role: "user",
+        content: `あなたはカスタマーサポートのAIです。\n既存チケットの件名:「${existingSubject}」\n新しいメッセージ:「${newMessage}」\nこれは既存チケットとは別の新しい問い合わせですか？YESまたはNOのみで答えてください。`,
+      }],
+    });
+    const text = res.content[0].type === "text" ? res.content[0].text.trim().toUpperCase() : "NO";
+    return text.startsWith("YES");
+  } catch {
+    return false;
+  }
+}
 
 export const dynamic = "force-dynamic";
 
@@ -132,7 +153,12 @@ async function processEvents(events: any[]) {
 
     let ticketId: string;
 
-    if (existingTicket) {
+    // AIで新トピック判定（新トピックなら新チケット作成）
+    const newTopic = existingTicket
+      ? await isNewTopic(existingTicket.subject, norm.display)
+      : false;
+
+    if (existingTicket && !newTopic) {
       // 既存チケットにメッセージを追記
       await db.message.create({
         data: {

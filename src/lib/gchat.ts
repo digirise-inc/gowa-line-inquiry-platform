@@ -8,7 +8,7 @@ export function isDemoMode() {
 
 export async function sendGchatNotification(text: string): Promise<{ ok: boolean; demo: boolean; error?: string }> {
   const url = process.env.GCHAT_WEBHOOK_URL;
-  if (isDemoMode() || !url) {
+  if (!url) {
     return { ok: true, demo: true };
   }
   try {
