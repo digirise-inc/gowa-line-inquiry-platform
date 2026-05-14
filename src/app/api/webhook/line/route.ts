@@ -71,7 +71,7 @@ export async function POST(req: Request) {
 
   const events: any[] = payload?.events ?? [];
 
-  void processEvents(events).catch((e) => console.error("LINE event processing error", e));
+  await processEvents(events).catch((e) => console.error("LINE event processing error", e));
 
   return NextResponse.json({ ok: true, queued: events.length });
 }
