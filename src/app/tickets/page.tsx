@@ -6,6 +6,7 @@ import { TicketCard } from "@/components/tickets/ticket-card";
 import { FilterBar } from "@/components/tickets/filter-bar";
 import { getTicketsList, getUnmappedCount, getUsers } from "@/lib/queries";
 import { Plus, Inbox } from "lucide-react";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
@@ -33,10 +34,12 @@ export default async function TicketsPage({ searchParams }: { searchParams?: Rec
             </p>
           </div>
           <div className="flex gap-2">
-            <Button variant="ai" size="sm">
-              <Plus className="h-4 w-4" />
-              新規チケット
-            </Button>
+            <Link href="/tickets/new">
+              <Button variant="ai" size="sm">
+                <Plus className="h-4 w-4" />
+                新規チケット
+              </Button>
+            </Link>
           </div>
         </header>
 
